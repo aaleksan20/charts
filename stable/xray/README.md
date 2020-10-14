@@ -1,39 +1,92 @@
 # JFrog Xray HA on Kubernetes Helm Chart
 
-**Heads up: Our Helm Chart docs are moving to our main documentation site. For Xray installers, see [Installing Xray](https://www.jfrog.com/confluence/display/JFROG/Installing+Xray).**
+**Heads up: Our Helm Chart docs have moved to our main documentation site. For Xray, see [Installing Xray](https://www.jfrog.com/confluence/display/JFROG/Installing+Xray#InstallingXray-HelmInstallation.1).**
 
-## Prerequisites Details
-
-* Kubernetes 1.12+
+## Requirements
+See [Helm Chart Requirements](https://www.jfrog.com/confluence/display/JFROG/System+Requirements#SystemRequirements-HelmChartRequirements) for details.
 
 ## Chart Details
-
 This chart will do the following:
 
 * Optionally deploy PostgreSQL (**NOTE:** For production grade installations it is recommended to use an external PostgreSQL)
 * Deploy RabbitMQ (optionally as an HA cluster)
 * Deploy JFrog Xray micro-services
 
-## Requirements
+### Deploying Artifactory for Small, Medium or Large Installations
 
-- A running Kubernetes cluster
-  - Dynamic storage provisioning enabled
-  - Default StorageClass set to allow services using the default StorageClass for persistent storage
-- A running Artifactory
-- [Kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) installed and setup to use the cluster
-- [Helm](https://helm.sh/) v2 or v3 installed
+In the chart directory, includes three values files, one for each installation type - small/medium/large. These values files are recommendations for setting resources requests and limits for your installation. You can find the files in the corresponding chart directory.
 
+## Installing Xray
+In the chart directory, includes three values files, one for each installation type - small/medium/large. These values files are recommendations for setting resources requests and limits for your installation. You can find the files in the corresponding chart directory.
 
-## Install JFrog Xray
+To set Xray for high availability, set the replicaCount in the values.yaml file to >1 (the recommended is 3). It is highly recommended to also set RabbitMQ to run as an HA cluster.
 
-### Add ChartCenter Helm repository
-
-Before installing JFrog helm charts, you need to add the [ChartCenter helm repository](https://chartcenter.io) to your helm client.
+1. Start Xray with 3 replicas per service and 3 replicas for RabbitMQ.
+```bash
+helm upgrade --install xray --namespace xray --set replicaCount=3  --set rabbitmq-ha.replicaCount=3 center/jfrog/xray
+```
+2. Add the ChartCenter Helm repository to your Helm client.
 
 ```bash
 helm repo add center https://repo.chartcenter.io
+```
+3. Update the repository.
+
+```bash
 helm repo update
 ```
+4. Next, create a unique master key; JFrog Xray requires a unique master key to be used by all micro-services in the same cluster. By default the chart has one set in values.yaml (xray.masterKey). For production grade installations it is strongly recommended to use a custom master key. If you initially use the default master key it will be very hard to change the master key at a later stage This key is for demo purpose and should not be used in a production environment.
+
+Generate a unique key and pass it to the template during installation/upgrade.
+
+```bash
+# Create a key
+export MASTER_KEY=$(openssl rand -hex 32)
+echo ${MASTER_KEY}
+
+# Pass the created master key to Helm
+helm upgrade --install --set xray.masterKey=${MASTER_KEY} --namespace xray center/jfrog/xray
+Alternatively, you can create a secret containing the master key manually and pass it to the template during installation/upgrade.
+
+# Create a key
+export MASTER_KEY=$(openssl rand -hex 32)
+echo ${MASTER_KEY}
+
+# Create a secret containing the key. The key in the secret must be named master-key
+kubectl create secret generic my-secret --from-literal=master-key=${MASTER_KEY}
+
+# Pass the created secret to Helm
+helm upgrade --install xray --set xray.masterKeySecretName=my-secret --namespace xray center/jfrog/xray
+```
+
+In either case, make sure to pass the same master key on all future calls to helm install and helm upgrade. In the first case, this means always passing --set xray.masterKey=${MASTER_KEY}. In the second, this means always passing --set xray.masterKeySecretName=my-secret and ensuring the contents of the secret remain unchanged.
+
+5. Customize the product configuration (optional) including database, Java Opts, and filestore.
+Unlike other installations, Helm Chart configurations are made to the values.yaml and are then applied to the system.yaml.
+
+Follow these steps to apply the configuration changes.
+
+Make the changes to values.yaml. 
+Run the command.
+
+helm upgrade --install xray --namespace xray -f values.yaml
+
+
+
+
+
+Access Xray from your browser at: http://<jfrogUrl>/ui/, then go to the Security & Compliance tab in the Application module in the UI.
+Check the status of your deployed helm releases.
+
+helm status xray
+
+
+For advanced installation options, see Helm Charts Installers for Advanced Users.
+
+
+
+
+
 
 ### Install Chart
 
